@@ -67,16 +67,17 @@ export function validateAcademicWorkLimits(input: {
     return { ok: true };
 }
 
-const DOCUMENT_FORMATS = ['.pdf', '.docx'];
+const DOCUMENT_FORMATS = ['.pdf', '.doc', '.docx'];
 
-// Slots de documento (PDF) também aceitam DOCX, mesmo que a configuração salva só liste PDF.
+// Trabalhos em documento são recebidos somente em DOCX, mesmo que a configuração salva liste PDF.
 export function normalizeAcademicWorkFormats(formats: unknown): string[] {
     const list = Array.isArray(formats)
         ? formats.map((format) => String(format ?? '').trim().toLowerCase()).filter(Boolean)
             .map((format) => (format.startsWith('.') ? format : `.${format}`))
         : [];
-    if (list.length === 0 || list.includes('.pdf') || list.includes('.docx')) {
-        return Array.from(new Set([...DOCUMENT_FORMATS, ...list]));
+    const others = list.filter((format) => !DOCUMENT_FORMATS.includes(format));
+    if (list.length === 0 || others.length < list.length) {
+        return Array.from(new Set(['.docx', ...others]));
     }
     return Array.from(new Set(list));
 }

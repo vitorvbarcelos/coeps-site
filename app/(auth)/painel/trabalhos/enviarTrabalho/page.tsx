@@ -873,7 +873,7 @@ function SubmissionForm() {
             <div className="flex items-baseline justify-between gap-4">
               <div>
                 <div className="form-label">Arquivos do Trabalho *</div>
-                <div className="text-xs text-gray-600 mt-1">Um arquivo por requisito. Aceitamos documentos em PDF ou Word (DOCX).</div>
+                <div className="text-xs text-gray-600 mt-1">Um arquivo por requisito. Aceitamos somente documentos Word (DOCX).</div>
               </div>
             </div>
 

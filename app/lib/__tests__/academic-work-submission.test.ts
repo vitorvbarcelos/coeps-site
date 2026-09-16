@@ -37,9 +37,9 @@ test('defaults unknown participation modes to regular', () => {
     assert.equal(normalizeParticipationMode(undefined), 'REGULAR');
 });
 
-test('document slots accept both PDF and DOCX', () => {
-    assert.deepEqual(normalizeAcademicWorkFormats(['.pdf']), ['.pdf', '.docx']);
-    assert.deepEqual(normalizeAcademicWorkFormats(['PDF']), ['.pdf', '.docx']);
-    assert.deepEqual(normalizeAcademicWorkFormats(undefined), ['.pdf', '.docx']);
+test('document slots accept only DOCX', () => {
+    assert.deepEqual(normalizeAcademicWorkFormats(['.pdf']), ['.docx']);
+    assert.deepEqual(normalizeAcademicWorkFormats(['PDF', '.docx']), ['.docx']);
+    assert.deepEqual(normalizeAcademicWorkFormats(undefined), ['.docx']);
     assert.deepEqual(normalizeAcademicWorkFormats(['.png']), ['.png']);
 });
