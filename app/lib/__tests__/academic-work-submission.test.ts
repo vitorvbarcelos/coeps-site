@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+    normalizeAcademicWorkFormats,
     normalizeParticipationMode,
     purchaserIsRemoteAuthor,
     validateAcademicWorkAuthors,
@@ -34,4 +35,11 @@ test('defaults unknown participation modes to regular', () => {
     assert.equal(normalizeParticipationMode('REMOTE'), 'REMOTE');
     assert.equal(normalizeParticipationMode('remote'), 'REGULAR');
     assert.equal(normalizeParticipationMode(undefined), 'REGULAR');
+});
+
+test('document slots accept both PDF and DOCX', () => {
+    assert.deepEqual(normalizeAcademicWorkFormats(['.pdf']), ['.pdf', '.docx']);
+    assert.deepEqual(normalizeAcademicWorkFormats(['PDF']), ['.pdf', '.docx']);
+    assert.deepEqual(normalizeAcademicWorkFormats(undefined), ['.pdf', '.docx']);
+    assert.deepEqual(normalizeAcademicWorkFormats(['.png']), ['.png']);
 });

@@ -8,12 +8,20 @@ import { useEffect, useState, useRef } from 'react';
 
 import { isTodayBetweenDates } from '@/lib/isTodayBetweenDates';
 // --- Função Auxiliar para Retry com Tipagem Correta ---
-import { Clock, FileText, CheckCircle, AlertCircle, Loader, Info, UserPlus, Trash2, BookOpen, Target, Microscope, MessageSquare, Award, Hash, BookMarked, Save, ArrowLeft, X, Plus, Link, Loader2 } from 'lucide-react';
+import { Clock, FileText, CheckCircle, AlertCircle, Loader, Info, UserPlus, Trash2, BookOpen, Target, Microscope, MessageSquare, Award, Hash, BookMarked, Save, ArrowLeft, X, Plus, Link, Loader2, FileUp } from 'lucide-react';
 import { IAcademicWorksProps } from '@/lib/types/academicWorks/academicWorks.t';
 import { AsyncStatePanel, StatusBanner } from '@/components/cieps';
 import { fetchWithTimeout, readJsonResponse } from '@/lib/client/fetchWithTimeout';
-import { validateAcademicWorkAuthors } from '@/lib/academic-work-submission';
+import { normalizeAcademicWorkFormats, validateAcademicWorkAuthors } from '@/lib/academic-work-submission';
 import './style.css';
+
+const FORMAT_MIME: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword',
+};
+
+const formatLabels = (formats: string[]) => formats.map(f => f.replace('.', '').toUpperCase());
 
 function createLocalUploadId(): string {
   return `file_${crypto.randomUUID()}`;
@@ -285,9 +293,9 @@ function SubmissionForm() {
     const req = slotRequisitos?.[slotIndex];
     if (!req) return 'Requisito ausente para este slot.';
     const ext = fileExt(file.name);
-    const allowed = req.formatos.map(f => f.toLowerCase());
+    const allowed = normalizeAcademicWorkFormats(req.formatos);
     if (!ext || !allowed.includes(ext)) {
-      return `Arquivo do slot ${slotIndex + 1} inválido. Formatos permitidos: ${req.formatos.join(', ')}.`;
+      return `Arquivo "${file.name}" inválido. Envie em ${formatLabels(allowed).join(' ou ')}.`;
     }
     return null;
   };
@@ -865,7 +873,7 @@ function SubmissionForm() {
             <div className="flex items-baseline justify-between gap-4">
               <div>
                 <div className="form-label">Arquivos do Trabalho *</div>
-                <div className="text-xs text-gray-600 mt-1">Um arquivo por requisito (máx. {slotRequisitos.length}).</div>
+                <div className="text-xs text-gray-600 mt-1">Um arquivo por requisito. Aceitamos documentos em PDF ou Word (DOCX).</div>
               </div>
             </div>
 
@@ -873,90 +881,98 @@ function SubmissionForm() {
               {slotRequisitos.map((req, slotIndex) => {
                 const inputId = `slot-file-${slotIndex}`;
                 const slotFile = slotFiles[slotIndex];
-                const accept = (req.formatos ?? []).map(f => f.trim()).filter(Boolean).join(',');
+                const formatos = normalizeAcademicWorkFormats(req.formatos);
+                const accept = formatos.flatMap(f => FORMAT_MIME[f] ? [f, FORMAT_MIME[f]] : [f]).join(',');
+                const labels = formatLabels(formatos);
+                const limiteMb = modalidade ? Math.round(modalidade.limite_maximo_de_postagem / 1024 / 1024) : null;
 
-                const statusIcon =
-                  slotFile?.status === 'uploading' ? (
-                    <Loader className="animate-spin text-blue-500" size={16} />
-                  ) : slotFile?.status === 'completed' ? (
-                    <CheckCircle className="text-green-500" size={16} />
-                  ) : slotFile?.status === 'error' ? (
-                    <AlertCircle className="text-red-500" size={16} />
-                  ) : null;
+                const selectFile = (f?: File | null) => {
+                  if (!f) return;
+                  const validationError = validateFileFormatForSlot(slotIndex, f);
+                  setFormError(validationError);
+                  if (validationError) return;
+                  handleSlotFileUpload(slotIndex, f);
+                };
 
                 return (
-                  <div
-                    key={slotIndex}
-                    className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <label htmlFor={inputId} className="block">
-                          <div className="text-sm font-semibold text-gray-900">
-                            {slotIndex + 1} - {req.titulo}
-                          </div>
-                        </label>
-                        <div className="text-xs text-gray-600 mt-1">
-                          Formatos permitidos: {(req.formatos ?? []).join(', ')}
-                        </div>
-                      </div>
-                      <div className="shrink-0">{statusIcon}</div>
+                  <div key={slotIndex} className={`upload-slot ${slotFile ? `upload-slot--${slotFile.status}` : ''}`}>
+                    <div className="upload-slot-header">
+                      <span className="upload-slot-index">{slotIndex + 1}</span>
+                      <label htmlFor={inputId} className="upload-slot-title">{req.titulo}</label>
                     </div>
 
-                    <div className="mt-3">
-                      <input
-                        id={inputId}
-                        type="file"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) {
-                            const validationError = validateFileFormatForSlot(slotIndex, f);
-                            setFormError(validationError);
-                            if (validationError) return;
-                            handleSlotFileUpload(slotIndex, f);
-                          }
+                    {!slotFile ? (
+                      <label
+                        htmlFor={inputId}
+                        className="upload-dropzone"
+                        onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('is-dragging'); }}
+                        onDragLeave={(e) => e.currentTarget.classList.remove('is-dragging')}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.remove('is-dragging');
+                          selectFile(e.dataTransfer.files?.[0]);
                         }}
-                        className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-gray-800 hover:file:bg-gray-200"
-                        accept={accept}
-                      />
-
-                      {slotFile && (
-                        <div className="mt-3">
-                          <div className="text-sm font-medium text-gray-900">{slotFile.originalName}</div>
-                          <div className="text-xs text-gray-600">{formatFileSize(slotFile.size)}</div>
-
-                          {slotFile.status === 'uploading' && (
-                            <div className="mt-3">
-                              <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
-                                <div
-                                  className="h-2 rounded-full bg-blue-500 transition-[width]"
-                                  style={{ width: `${slotFile.progress}%` }}
-                                />
-                              </div>
-                              <div className="text-xs text-gray-600 mt-2">Enviando... {slotFile.progress}%</div>
+                      >
+                        <FileUp className="upload-dropzone-icon" size={28} />
+                        <span className="upload-dropzone-text">
+                          <strong>Clique para escolher</strong> ou arraste o arquivo aqui
+                        </span>
+                        <span className="upload-format-chips">
+                          {labels.map(label => (
+                            <span key={label} className="upload-format-chip">{label}</span>
+                          ))}
+                          {limiteMb ? <span className="upload-format-limit">até {limiteMb} MB</span> : null}
+                        </span>
+                      </label>
+                    ) : (
+                      <div className="upload-file">
+                        <div className="upload-file-row">
+                          <span className={`upload-file-badge upload-file-badge--${fileExt(slotFile.originalName).replace('.', '')}`}>
+                            {fileExt(slotFile.originalName).replace('.', '').toUpperCase() || 'ARQ'}
+                          </span>
+                          <div className="upload-file-info">
+                            <div className="upload-file-name" title={slotFile.originalName}>{slotFile.originalName}</div>
+                            <div className="upload-file-meta">
+                              {formatFileSize(slotFile.size)}
+                              {slotFile.status === 'uploading' && <> · Enviando {Math.round(slotFile.progress)}%</>}
+                              {slotFile.status === 'completed' && <span className="upload-ok"> · <CheckCircle size={12} /> Enviado</span>}
+                              {slotFile.status === 'error' && <span className="upload-err"> · <AlertCircle size={12} /> Falhou</span>}
                             </div>
-                          )}
-
-                          {slotFile.status === 'error' && slotFile.error && (
-                            <p className="text-xs text-red-600 mt-2">{slotFile.error}</p>
-                          )}
-
-                          {slotFile.status === 'completed' && (
-                            <div className="text-xs text-green-600 mt-2">Upload concluído!</div>
-                          )}
-
+                          </div>
                           <button
                             type="button"
                             onClick={() => removeSlotFile(slotIndex)}
-                            className="mt-3 inline-flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
+                            className="upload-file-remove"
                             aria-label={`Remover arquivo do slot ${slotIndex + 1}`}
                           >
                             <X size={16} />
-                            Remover
                           </button>
                         </div>
-                      )}
-                    </div>
+
+                        {slotFile.status === 'uploading' && (
+                          <div className="upload-progress">
+                            <div className="upload-progress-bar" style={{ width: `${slotFile.progress}%` }} />
+                          </div>
+                        )}
+
+                        {slotFile.status === 'error' && slotFile.error && (
+                          <p className="upload-err-msg">{slotFile.error}</p>
+                        )}
+
+                        <label htmlFor={inputId} className="upload-file-replace">Trocar arquivo</label>
+                      </div>
+                    )}
+
+                    <input
+                      id={inputId}
+                      type="file"
+                      className="sr-only"
+                      accept={accept}
+                      onChange={(e) => {
+                        selectFile(e.target.files?.[0]);
+                        e.target.value = '';
+                      }}
+                    />
                   </div>
                 );
               })}
